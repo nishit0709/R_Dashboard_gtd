@@ -1,0 +1,242 @@
+---
+title: "Global Terrorism Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(readxl)
+library(tidyverse)
+library(shiny)
+library(hrbrthemes)
+library(wordcloud)
+library(tm)
+library(treemap)
+library(packcircles)
+library(viridis)
+dataset = read_excel("dataset2.xlsx")
+```
+
+Global
+===
+
+Column {.sidebar data-width=200}
+-----------------------------------------------------------------------
+### Selector
+```{r}
+
+selectInput(inputId = "year", label = "Select the year:", choices = unique(dataset$iyear), 
+            selected = 1970)
+
+```
+
+Row{data-heigh=650}
+-----------------------------------------------------------------------
+### Global Terrorism Distribution
+```{r}
+world = map_data("world")
+renderPlot({
+  req(input$year)
+  world_data_by_year = filter(dataset, iyear %in% isolate(input$year))
+  ggplot() +
+  geom_map(
+    data = world, map = world,
+    aes(long, lat, map_id = region),
+    color = "black", fill ="lightgrey", size = 0.1
+  ) +
+  geom_point(data = world_data_by_year,
+             aes(longitude, latitude, color='red'),
+             alpha = 0.5) +
+    scale_colour_discrete(labels = c('Terrorism Spots')) +
+    labs(fill="", x="Longitude", y="Latitude")
+
+})
+```
+
+
+Row{data-height = 350}
+-----------------------------------------------------------------------
+### Region Wise Total Deaths
+
+```{r}
+regions = unique(dataset$region_txt)
+deaths = c()
+for(region in regions){
+  death = filter(dataset, region_txt == region)$nkill
+  deaths = append(deaths, sum(na.omit(death)))
+}
+
+df = data.frame( regions, deaths )
+
+ggplot(df, aes(x=regions, y=deaths, xlab("Deaths"))) + 
+  geom_bar(stat = "identity") +
+  coord_flip() + labs(x="Deaths", y="Regions")
+
+
+```
+
+### Top 15 Terrorist Organizations based on fatalities
+
+```{r}
+  renderPlot({
+    req(input$year)
+    country_groups = filter(dataset, iyear %in% isolate(input$year))
+    country_groups = country_groups[, c('gname', 'nkill')]
+    country_groups = country_groups %>% drop_na(nkill)
+    groups = unique(country_groups$gname)
+    kills = c()
+    for(group in groups)
+      kills = append(kills, sum(filter(country_groups, gname == group)$nkill))
+    
+    df = data.frame(groups,kills)
+    df = df[order(df$kills, decreasing = TRUE),]
+    df = df %>% slice(0:10)
+    
+    colors = c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', 
+               '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe'
+    )
+    
+    ggplot(df, aes(x = 2, y = kills, fill = groups)) +
+      geom_bar(stat = "identity", color = "white") +
+      coord_polar(theta = "y", start = 0)+
+      scale_fill_manual(values = colors) +
+      theme_void()+ xlim(0.5, 2.5) 
+  })
+  
+```
+
+### Most used Weapon Types
+
+```{r}
+data = na.omit(dataset$weapsubtype1_txt)
+data = paste(data, collapse = " ")
+docs = VCorpus(VectorSource(data))
+
+docs <- docs %>%
+  tm_map(removeNumbers) %>%
+  tm_map(removePunctuation) %>%
+  tm_map(stripWhitespace)
+
+docs <- tm_map(docs, content_transformer(tolower))
+
+dtm <- TermDocumentMatrix(docs) 
+matrix <- as.matrix(dtm) 
+words <- sort(rowSums(matrix),decreasing=TRUE) 
+df <- data.frame(word = names(words),freq=words)
+
+set.seed(1234) # for reproducibility 
+wordcloud(words = df$word, c(4,.8), freq = df$freq, min.freq = 1,    
+          max.words=200, random.order=FALSE, rot.per=0.35,  
+          colors=brewer.pal(8, "Dark2"))
+```
+
+Country-Wise
+===
+
+Column {.sidebar data-width=200}
+-----------------------------------------------------------------------
+### Selector
+```{r}
+
+selectInput(inputId = "country", label = "Select the country:", choices = unique(dataset$country_txt), selected = "India")
+selectInput(inputId = "year1", label = "Select the year:", choices = unique(dataset$iyear), selected = 2000)
+```
+
+Row {data-height=500}
+-----------------------------------------------------------------------
+### Incidents over time
+```{r} 
+renderPlot({
+  req(input$country)
+  incidents = filter(dataset, country_txt %in% isolate(input$country))
+  tb = table(incidents$iyear)
+  df = as.data.frame(tb) 
+  df$Var1 = as.numeric(df$Var1) + 1970
+  ggplot(df, aes(x=Var1, y=Freq, group = 1)) +
+    geom_line( color="#69b3a2", size=2, alpha=0.9, linetype=1) +
+    geom_point() + scale_x_continuous(n.breaks = 5) +
+    labs(x="Timeline", y ="Incidents")
+})
+
+```
+
+### Most Terrorism Prone Provinces
+```{r} 
+renderPlot({
+  req(input$year1, input$country)
+  data = filter(dataset, country_txt %in% isolate(input$country), iyear %in% isolate(input$year1))
+  df = as.data.frame(table(data$provstate))
+  df = df %>% slice(0:10)
+  
+  
+  # Generate the layout
+  packing <- circleProgressiveLayout(df$Freq, sizetype='area')
+  packing$radius <- 0.95*packing$radius
+  df <- cbind(df, packing)
+  dat.gg <- circleLayoutVertices(packing, npoints=50)
+  
+  # Plot 
+  ggplot() + 
+    geom_polygon(data = dat.gg, aes(x, y, group = id, fill=id), colour = "black", alpha = 0.6) +
+    scale_fill_viridis() +
+    geom_text(data = df, aes(x, y, size=Freq, label = Var1), color="black") +
+    theme_void() + 
+    theme(legend.position="none")+ 
+    coord_equal()
+})
+
+```
+
+Row {data-height=500}
+-----------------------------------------------------------------------
+### Top 15 terrorist organizations based on public life damage
+```{r} 
+renderPlot({
+  req(input$year1, input$country)
+  df = filter(dataset, country_txt %in% isolate(input$country), iyear %in% isolate(input$year1))
+  df = df[, c('gname', 'nkill', 'nwound')]
+  df = df %>% drop_na(nkill, nwound)
+  damage = df$nkill + df$nwound
+  df = data.frame(df$gname, damage)
+  dmg = c()
+  groups = unique(df$df.gname)
+  for(group in groups)
+    dmg = append(dmg, sum(filter(df, df$df.gname==group)$damage))
+  
+  
+  df = data.frame(groups, dmg)
+  df = df[order(df$dmg, decreasing = TRUE),]
+  df = df %>% slice(0:15)
+  
+  treemap(df, index="groups",
+          border.col=c("black","white"),
+          title = "", border.lwds=c(4,2),   
+          vSize="dmg", type="index",
+          aspRatio = 2
+  )
+})
+
+```
+
+### Attack Type Distibution
+```{r} 
+renderPlot({
+  req(input$year1, input$country)
+  data = filter(dataset, country_txt %in% isolate(input$country), iyear %in% isolate(input$year1))$attacktype1_txt
+  df = as.data.frame(table(data))
+  colors = c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', 
+             '#911eb4', '#46f0f0', '#f032e6', '#bcf60c'
+            )
+  ggplot(df, aes(x = 2, y = Freq, fill = data)) +
+    geom_bar(stat = "identity", color = "white") +
+    coord_polar(theta = "y", start = 0)+
+    scale_fill_manual(values = colors) +
+    theme_void()+
+    xlim(0.5, 2.5)  
+})
+
+```
