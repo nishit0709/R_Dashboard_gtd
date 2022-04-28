@@ -1,5 +1,4 @@
-# R_Dashboard_gtd
-Global Terrorism Dashboard
+# Global Terrorism Dashboard
 
 
 Run the following command in R CLI to download the required packages
