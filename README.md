@@ -10,14 +10,10 @@ A R language based visualization dashboard to see and infer from the trends in t
 3. Click on **knit** in the toolbar to run the code
 
 ## Output
-Run the following command in R CLI to download the required packages
-
-
 - World View Tab  
     Contains four vizualizations, scatterplot on the world map showing the locations on which terrorist attacks took place in the given year, bar chart showing region wise total deaths, doughnut graph showing Top 15 terrorist groups/organisations on the basis on number of fatalities caused and a wordcloud showing most used weapon types.
 
     ![Screenshot from 2022-04-28 13-02-26](https://user-images.githubusercontent.com/60532223/165757304-0a60daff-5885-4409-8872-ab6fe94a225b.png)
-
 
 - Country-Wise view Tab  
     On selecting a country and a particular year, four vizualisation appears: line chart which shows number of terror attack incidents over time for the given country, bubble chart showing most terror attack prone regions in a country, treemap denoting the most active terror organisations marked by their areas and a donut chart showing the attack type distribution.
